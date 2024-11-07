@@ -363,76 +363,87 @@ void loop() {
         currentType = "kaca";
         if (myNex.readNumber("setor_kaca.b0.val") == 1) {  // Beling
             Serial.println("Gambar Beling Ditekan");
-            String buffer = myNex.readStr("setor_kaca.t2.txt");
-            currentSubType = buffer;
+            currentSubType = "Tembaga";
             Wire.beginTransmission(I2C_ADDRESS);
             Wire.write(4);
             Wire.endTransmission();
             myNex.writeNum("setor_kaca.b0.val", 0);
+            changePage(11);
         }
 
         if (myNex.readNumber("setor_kaca.b1.val") == 1) {  // Botol Kecap
             Serial.println("Gambar Botol Kecap Ditekan");
-            String buffer = myNex.readStr("setor_kaca.t4.txt");
-            currentSubType = buffer;
+            currentSubType = "Tembaga";
             Wire.beginTransmission(I2C_ADDRESS);
             Wire.write(4);
             Wire.endTransmission();
             myNex.writeNum("setor_kaca.b1.val", 0);
+            changePage(11);
         }
 
         if (myNex.readNumber("setor_kaca.b2.val") == 1) {  // Botol Utuh
             Serial.println("Gambar Botol Utuh Ditekan");
-            String buffer = myNex.readStr("setor_kaca.t6.txt");
-            currentSubType = buffer;
+            currentSubType = "Tembaga";
             Wire.beginTransmission(I2C_ADDRESS);
             Wire.write(4);
             Wire.endTransmission();
             myNex.writeNum("setor_kaca.b2.val", 0);
+            changePage(11);
         }
 
         if (myNex.readNumber("setor_kaca.b3.val") == 1) {  // Botol Hijau
             Serial.println("Gambar Botol Hijau Ditekan");
-            String buffer = myNex.readStr("setor_kaca.t8.txt");
-            currentSubType = buffer;
+            currentSubType = "Tembaga";
             Wire.beginTransmission(I2C_ADDRESS);
             Wire.write(4);
             Wire.endTransmission();
             myNex.writeNum("setor_kaca.b3.val", 0);
+            changePage(11);
         }
         break;
       case 11:
         // Set nilai awal jumlah item
-        if (changedPage) countItem = 0;
+        if (changedPage) {
+          countItem = 0;
+          // update read weight sensor
+          updateStorageValues();
+          previousWeightA = storagePlastic;
+          previousWeightB = storageMetal;
+          previousWeightC = storagePaper;
+          previousWeightD = storageGlass;
+        }
 
         // Deteksi item dan akumulasi jumlah item
         if (detectItems(TRIG_PIN_A, ECHO_PIN_A)){
           countItem ++;
           Serial.print("Ada item, jumlah item masuk :  " + countItem);
+          // Foto ESP CAM
         }
 
         // Selesai setor
         if (myNex.readNumber("konfirm_setor.b4.val") == 1){
+          updateStorageValues();
+          
           if(currentType == "plastik"){
-            //processStorageA(currentSubType);
+            processStorageA(currentSubType);
             Wire.beginTransmission(I2C_ADDRESS);
             Wire.write(5);
             Wire.endTransmission();
           }
           else if(currentType == "kertas"){
-            //processStorageB(currentSubType);
+            processStorageB(currentSubType);
             Wire.beginTransmission(I2C_ADDRESS);
             Wire.write(6);
             Wire.endTransmission();
           }
           else if(currentType == "logam"){
-            //processStorageC(currentSubType);
+            processStorageC(currentSubType);
             Wire.beginTransmission(I2C_ADDRESS);
             Wire.write(7);
             Wire.endTransmission();
           }
           else if(currentType == "kaca"){
-            //processStorageD(currentSubType);
+            processStorageD(currentSubType);
             Wire.beginTransmission(I2C_ADDRESS);
             Wire.write(8);
             Wire.endTransmission();
@@ -465,33 +476,33 @@ bool cekBeratWajar(float beratJenis, float rerataBeratJenis){
 // Functions to handle waste type selection
 void processStorageA(const String &subtype) {
   delay(500);
+  // update read weight sensor
   currentWeightA = storagePlastic;
   newWeightA = currentWeightA - previousWeightA;
-  previousWeightA = currentWeightA;
   processResultPlastic(newWeightA, subtype);
 }
 
 void processStorageB(const String &subtype) {
   delay(500);
+  // update read weight sensor
   currentWeightB = storagePaper;
   newWeightB = currentWeightB - previousWeightB;
-  previousWeightB = currentWeightB;
   processResultPaper(newWeightB, subtype);
 }
 
 void processStorageC(const String &subtype) {
   delay(500);
+  // update read weight sensor
   currentWeightC = storageMetal;
   newWeightC = currentWeightC - previousWeightC;
-  previousWeightC = currentWeightC;
   processResultMetal(newWeightC, subtype);
 }
 
 void processStorageD(const String &subtype) {
   delay(500);
+  // update read weight sensor
   currentWeightD = storageGlass;
   newWeightD = currentWeightD - previousWeightD;
-  previousWeightD = currentWeightD;
   processResultGlass(newWeightD, subtype);
 }
 
@@ -500,17 +511,10 @@ void processResultPlastic(float newWeight, const String &subtype) {
   float pricePerKg = 0;
   float weightPerItem = 0;
 
-  if (subtype == "PET Botol Bening") {pricePerKg = 5500; weightPerItem = 0.01;}
-  else if (subtype == "PET Botol Warna") {pricePerKg = 1500; weightPerItem = 0.012;}
-  else if (subtype == "Plastic Kemasan") {pricePerKg = 400; weightPerItem = 0.005;}
-  else if (subtype == "Tutup Botol") {pricePerKg = 3000; weightPerItem = 0.009;}
-
-  // Cek berat Jenis
-  float beratJenis = newWeight / countItem;
-  if(!cekBeratWajar(beratJenis, weightPerItem)){
-    changePage(1);
-    return;
-  }
+  if (subtype == "PET Botol Bening") pricePerKg = 5500;
+  else if (subtype == "PET Botol Warna") pricePerKg = 1500;
+  else if (subtype == "Plastic Kemasan") pricePerKg = 400;
+  else if (subtype == "Tutup Botol") pricePerKg = 3000;
 
   float totalPrice = newWeight * pricePerKg;
   
@@ -521,17 +525,10 @@ void processResultPaper(float newWeight, const String &subtype) {
   float pricePerKg = 0;
   float weightPerItem = 0;
 
-  if (subtype == "Arsip (hvs, buku)") {pricePerKg = 1800; weightPerItem = 0.01;}
-  else if (subtype == "Tetra Pack") {pricePerKg = 300; weightPerItem = 0.01;}
-  else if (subtype == "Kardus") {pricePerKg = 1600; weightPerItem = 0.01;}
-  else if (subtype == "Majalah/koran") {pricePerKg = 500; weightPerItem = 0.01;}
-
-  // Cek berat Jenis
-  float beratJenis = newWeight / countItem;
-  if(!cekBeratWajar(beratJenis, weightPerItem)){
-    changePage(1);
-    return;
-  }
+  if (subtype == "Arsip (hvs, buku)") pricePerKg = 1800;
+  else if (subtype == "Tetra Pack") pricePerKg = 300; 
+  else if (subtype == "Kardus") pricePerKg = 1600;
+  else if (subtype == "Majalah/koran") pricePerKg = 500;
   
   float totalPrice = newWeight * pricePerKg;
 
@@ -542,17 +539,10 @@ void processResultMetal(float newWeight, const String &subtype) {
   float pricePerKg = 0;
   float weightPerItem = 0;
 
-  if (subtype == "Seng (kaleng)") {pricePerKg = 2000; weightPerItem = 0.01;}
-  else if (subtype == "Besi (paku, dll)") {pricePerKg = 3500; weightPerItem = 0.01;}
-  else if (subtype == "Aluminium") {pricePerKg = 10000; weightPerItem = 0.01;}
-  else if (subtype == "Tembaga (kawat)") {pricePerKg = 40000; weightPerItem = 0.01;}
-
-  // Cek berat Jenis
-  float beratJenis = newWeight / countItem;
-  if(!cekBeratWajar(beratJenis, weightPerItem)){
-    changePage(1);
-    return;
-  }
+  if (subtype == "Seng (kaleng)") pricePerKg = 2000;
+  else if (subtype == "Besi (paku, dll)") pricePerKg = 3500;
+  else if (subtype == "Aluminium") pricePerKg = 10000;
+  else if (subtype == "Tembaga (kawat)") pricePerKg = 40000;
 
   float totalPrice = newWeight * pricePerKg;
 
@@ -561,19 +551,11 @@ void processResultMetal(float newWeight, const String &subtype) {
 
 void processResultGlass(float newWeight, const String &subtype) {
   float pricePerKg = 0;
-  float weightPerItem = 0;
 
-  if (subtype == "Beling (pecahan)") {pricePerKg = 200; weightPerItem = 0.01;}
-  else if (subtype == "Botol Kecap") {pricePerKg = 300; weightPerItem = 0.01;}
-  else if (subtype == "Botol Utuh") {pricePerKg = 400; weightPerItem = 0.01;}
-  else if (subtype == "Botol Hijau") {pricePerKg = 500; weightPerItem = 0.01;}
-
-  // Cek berat Jenis
-  float beratJenis = newWeight / countItem;
-  if(!cekBeratWajar(beratJenis, weightPerItem)){
-    changePage(1);
-    return;
-  }
+  if (subtype == "Beling (pecahan)") pricePerKg = 200;
+  else if (subtype == "Botol Kecap") pricePerKg = 300;
+  else if (subtype == "Botol Utuh") pricePerKg = 400;
+  else if (subtype == "Botol Hijau") pricePerKg = 500;
 
   float totalPrice = newWeight * pricePerKg;
 
@@ -680,4 +662,24 @@ int detectItems(int trigPin, int echoPin) {
   int distance = duration * 0.034 / 2;  // Distance in cm
 
   return (distance < 10) ? 1 : 0;
+}
+
+int updateStorageValues(){
+  Wire.requestFrom(SLAVE_ADDRESS, 8);
+  
+  int loadCellData[4] = {0, 0, 0, 0};
+
+  int i = 0;
+  while (Wire.available() && i < 4) {
+    // Baca high byte dan low byte dari setiap wadah
+    uint8_t highByte = Wire.read();
+    uint8_t lowByte = Wire.read();
+    // Gabungkan menjadi int16 dan simpan di array
+    loadCellData[i] = (highByte << 8) | lowByte;
+    i++;
+  }
+  storagePlastic = loadCellData[0];
+  storageMetal = loadCellData[1];
+  storagePaper = loadCellData[2];
+  storageGlass = loadCellData[3];
 }
