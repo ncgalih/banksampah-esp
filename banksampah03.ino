@@ -14,8 +14,15 @@
 #define SCL_PIN 14  // Pin SCL baru
 #define I2C_ADDRESS 8  // Alamat I2C untuk slave ESP32
 
+// ultrasonic
 #define TRIG_PIN_A 4
 #define ECHO_PIN_A 5
+#define TRIG_PIN_B 13
+#define ECHO_PIN_B 34
+#define TRIG_PIN_C 32
+#define ECHO_PIN_C 27 
+#define TRIG_PIN_D 26 
+#define ECHO_PIN_D 25
 
 MFRC522 rfid(SS_PIN, RST_PIN);
 
@@ -363,7 +370,7 @@ void loop() {
         currentType = "kaca";
         if (myNex.readNumber("setor_kaca.b0.val") == 1) {  // Beling
             Serial.println("Gambar Beling Ditekan");
-            currentSubType = "Tembaga";
+            currentSubType = "Beling";
             Wire.beginTransmission(I2C_ADDRESS);
             Wire.write(4);
             Wire.endTransmission();
@@ -373,7 +380,7 @@ void loop() {
 
         if (myNex.readNumber("setor_kaca.b1.val") == 1) {  // Botol Kecap
             Serial.println("Gambar Botol Kecap Ditekan");
-            currentSubType = "Tembaga";
+            currentSubType = "Botol Kecap";
             Wire.beginTransmission(I2C_ADDRESS);
             Wire.write(4);
             Wire.endTransmission();
@@ -383,7 +390,7 @@ void loop() {
 
         if (myNex.readNumber("setor_kaca.b2.val") == 1) {  // Botol Utuh
             Serial.println("Gambar Botol Utuh Ditekan");
-            currentSubType = "Tembaga";
+            currentSubType = "Botol Utuh";
             Wire.beginTransmission(I2C_ADDRESS);
             Wire.write(4);
             Wire.endTransmission();
@@ -393,7 +400,7 @@ void loop() {
 
         if (myNex.readNumber("setor_kaca.b3.val") == 1) {  // Botol Hijau
             Serial.println("Gambar Botol Hijau Ditekan");
-            currentSubType = "Tembaga";
+            currentSubType = "Botol Hijau";
             Wire.beginTransmission(I2C_ADDRESS);
             Wire.write(4);
             Wire.endTransmission();
@@ -411,19 +418,24 @@ void loop() {
           previousWeightB = storageMetal;
           previousWeightC = storagePaper;
           previousWeightD = storageGlass;
+          Serial.println("previous weight " + String(previousWeightA));
         }
 
         // Deteksi item dan akumulasi jumlah item
-        if (detectItems(TRIG_PIN_A, ECHO_PIN_A)){
-          countItem ++;
-          Serial.print("Ada item, jumlah item masuk :  " + countItem);
+        //if (detectItems(TRIG_PIN_A, ECHO_PIN_A)){
+        //  countItem ++;
+        //  Serial.print("Ada item, jumlah item masuk :  " + countItem);
           // Foto ESP CAM
-        }
+
+        //}
 
         // Selesai setor
         if (myNex.readNumber("konfirm_setor.b4.val") == 1){
-          updateStorageValues();
-          
+          //updateStorageValues();
+          Serial.println("current weight " + String(storagePlastic));
+
+          Serial.println("Tombol selesai");
+
           if(currentType == "plastik"){
             processStorageA(currentSubType);
             Wire.beginTransmission(I2C_ADDRESS);
@@ -448,8 +460,8 @@ void loop() {
             Wire.write(8);
             Wire.endTransmission();
           }
-          changePage(12);
-          delay(250);
+          //changePage(12);
+          //delay(250);
           myNex.writeNum("konfirm_setor.b4.val", 0);
         }
     }
@@ -461,6 +473,9 @@ void loop() {
   //Wire.write(1);
   //Wire.endTransmission();  
   //delay(1000);
+  updateStorageValues();
+  Serial.println("storageplastic : "+String(storagePlastic));
+  Serial.println("prevoius weight : "+String(previousWeightA));
 }
 
 bool cekBeratWajar(float beratJenis, float rerataBeratJenis){
@@ -615,6 +630,8 @@ void mutasiRekening() {
 boolean createTransaction(String jenis_sampah, float weight, float pricePerKg, float kredit){
   HTTPClient http;
 
+  Serial.println("create transaction to server" + String(weight));
+
   String serverUrl = "https://banksampah-be.vercel.app/user/setor";
 
   http.begin(serverUrl); // Initialize HTTP connection
@@ -622,7 +639,7 @@ boolean createTransaction(String jenis_sampah, float weight, float pricePerKg, f
 
     // Create JSON object
   StaticJsonDocument<200> jsonDoc;
-  jsonDoc["rfid_user"] = cardID;
+  jsonDoc["uid_rfid"] = cardID;
   jsonDoc["jenis_sampah"] = jenis_sampah;
   jsonDoc["berat"] = weight;
   jsonDoc["harga_jenis"] = pricePerKg;
@@ -635,6 +652,8 @@ boolean createTransaction(String jenis_sampah, float weight, float pricePerKg, f
     // Send HTTP POST request
   int httpResponseCode = http.POST(requestBody);
 
+  Serial.println("Status code : " + String(httpResponseCode));
+
   if (httpResponseCode == 200) { // Check if request was successful
     String payload = http.getString();
     Serial.println("HTTP Response Code: " + String(httpResponseCode));
@@ -642,12 +661,15 @@ boolean createTransaction(String jenis_sampah, float weight, float pricePerKg, f
     
     changePage(12);
     currentSaldo += kredit;
-    myNex.writeStr("info_setor.t3", jenis_sampah);
-    myNex.writeStr("info_setor.t4", String(weight, 2) + " kg");
-    myNex.writeStr("info_setor.t5", "Rp " + String(kredit, 2));
+    delay(250);
+    myNex.writeStr("t3.txt", jenis_sampah);
+    myNex.writeStr("t4.txt", String(weight, 2) + " kg");
+    myNex.writeStr("t5.txt", "Rp " + String(kredit, 2));
 
     return true;
   }
+  String payload = http.getString();
+  Serial.println(payload);
   return false;
 }
 
@@ -665,7 +687,7 @@ int detectItems(int trigPin, int echoPin) {
 }
 
 int updateStorageValues(){
-  Wire.requestFrom(SLAVE_ADDRESS, 8);
+  Wire.requestFrom(I2C_ADDRESS, 8);
   
   int loadCellData[4] = {0, 0, 0, 0};
 
@@ -682,4 +704,39 @@ int updateStorageValues(){
   storageMetal = loadCellData[1];
   storagePaper = loadCellData[2];
   storageGlass = loadCellData[3];
+}
+
+void fotoESPCAM(){
+  HTTPClient http;  
+  String url = "https://192.168.1.1/photo";
+  http.begin(url);
+  int httpResponseCode = http.GET();
+  Serial.print("Foto: " + String(httpResponseCode) + " ");
+}
+String chat_id = "";
+String bot_token = "";
+
+void sendTelegramMessage(String message) {
+  if (WiFi.status() == WL_CONNECTED) {
+    String url = "https://api.telegram.org/bot" + bot_token + "/sendMessage";
+    HTTPClient http;
+    
+    // Buat data yang akan dikirim
+    String postData = "chat_id=" + chat_id + "&text=" + message;
+
+    http.begin(url);
+    http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+    
+    int httpResponseCode = http.POST(postData);
+    if (httpResponseCode > 0) {
+      String response = http.getString();
+      Serial.println("Pesan terkirim ke Telegram: " + response);
+    } else {
+      Serial.println("Error dalam pengiriman pesan: " + String(httpResponseCode));
+    }
+
+    http.end();
+  } else {
+    Serial.println("WiFi tidak terhubung");
+  }
 }
